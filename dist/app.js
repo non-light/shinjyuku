@@ -1,6 +1,7 @@
+import {operators,ticketGates,gateApproach,isTransfer} from './station.js';
 import {createWorld} from './world.js';
-import {destinations,spawn,surfaceAt,movePlayer,areaAt,visitIdAt,nearestStair} from './navigation.js';
-import {floorById} from './layout.js';
+import {destinations,spawn,surfaceAt,movePlayer,areaAt,visitIdAt,nearestStair,nearbyGate,gateCrossing} from './navigation.js';
+import {floors,floorById,stairs} from './layout.js';
 import {drawFloorMap,drawOverview,mapHits} from './map.js';
 
 const $=id=>document.getElementById(id);
@@ -15,7 +16,7 @@ const rawVisited=read('shinjuku-walk-visited-v2',[]);
 const visited=new Set(Array.isArray(rawVisited)?rawVisited.filter(id=>destinations.some(d=>d.id===id)):[]);
 let world,started=false,activeDialog=null,walked=0,yaw=-Math.PI/2,pitch=-.035;
 let position={...spawn};
-let mapFloor='overview';
+let mapFloor='overview',directoryOpen=false,selectedGate=null;
 const keys=new Set(),joy={x:0,y:0},velocity={x:0,z:0};
 let toastTimer,hintTimer,joyPointer=null,lookPointer=null,lastLook=null;
 let lastFrame=0,lastMap=0,stepDistance=0;
@@ -31,9 +32,12 @@ function markArea(){
   $('visited').textContent=`${visited.size} / ${destinations.length} エリア`;
 }
 function updateLocation(){
-  for(const b of document.querySelectorAll('[data-view-floor]'))b.classList.toggle('active',b.dataset.viewFloor===position.floor);
+  $('current-floor-badge').textContent=position.floor;
   $('floor').textContent=position.stairId?'↕':position.floor;$('location').textContent=areaAt(position.x,position.z,position);
-  const connection=nearestStair(position);$('connection-hint').hidden=!connection;if(connection)$('connection-hint').textContent=`階段 ${connection.from} ↔ ${connection.to} · ${connection.label}`;
+  const gate=nearbyGate(position),connection=gate?null:nearestStair(position);
+  $('connection-hint').hidden=!gate&&!connection;
+  if(gate)$('connection-hint').textContent=operators[gate.operator].short+' · '+gate.name+' ｜ '+(gate.oneWay?'出場専用':gate.toward);
+  else if(connection)$('connection-hint').textContent='階段 '+connection.from+' ↔ '+connection.to+' · '+connection.label;
   if(started)markArea();
 }
 function start(){
@@ -42,7 +46,7 @@ function start(){
   updateLocation();$('world').focus({preventScroll:true});hintTimer=setTimeout(()=>$('look-hint').style.opacity='0',6500);
 }
 $('start').addEventListener('click',start);
-function openDialog(id){stopInput();if(activeDialog)activeDialog.close();activeDialog=$(id);activeDialog.showModal();if(id==='map-dialog'){updateDestinations();drawMap($('large-map'),true);}}
+function openDialog(id){stopInput();if(activeDialog)activeDialog.close();activeDialog=$(id);activeDialog.showModal();if(id==='map-dialog'){updateDestinations();if(!directoryOpen)drawMap($('large-map'),true);}}
 for(const d of document.querySelectorAll('dialog')){
   d.querySelector('.close-dialog').addEventListener('click',()=>d.close());
   d.addEventListener('close',()=>{if(activeDialog===d)activeDialog=null;stopInput();});
@@ -50,13 +54,14 @@ for(const d of document.querySelectorAll('dialog')){
 }
 $('settings').addEventListener('click',()=>openDialog('settings-dialog'));
 $('about').addEventListener('click',()=>openDialog('about-dialog'));
-for(const id of['open-map','mini-map-button'])$(id).addEventListener('click',()=>openDialog('map-dialog'));
+for(const id of['open-map','mini-map-button','error-map'])$(id).addEventListener('click',()=>openDialog('map-dialog'));
 function teleport(d){
+  if(!world)return;
   stopInput();position=surfaceAt(d.x,d.z,d.floor);yaw=d.yaw;pitch=-.035;
   if(!started)start();if(activeDialog)activeDialog.close();
   world.camera.position.set(position.x,position.y+1.65,position.z);updateLocation();toast(`${d.name}へ移動しました`);$('world').focus({preventScroll:true});
 }
-$('reset').addEventListener('click',()=>teleport(destinations[0]));
+$('reset').addEventListener('click',()=>teleport({...spawn,name:'西口地下広場'}));
 function updateDestinations(){
   $('destination-list').replaceChildren();
   destinations.forEach((d,i)=>{
@@ -69,20 +74,66 @@ function updateDestinations(){
 function drawMap(canvas,large=false){
   const marker={...position,yaw};
   if(large&&mapFloor==='overview')drawOverview(canvas,marker,visited);
-  else drawFloorMap(canvas,marker,visited,large?mapFloor:position.floor,large);
+  else drawFloorMap(canvas,marker,visited,large?mapFloor:position.floor,large,large?selectedGate:null);
 }
 function setMapFloor(value){
   mapFloor=value;
+  if(selectedGate?.floor!==value)selectedGate=null;
+  $('gate-detail').hidden=!selectedGate;
   for(const option of document.querySelectorAll('[data-map-floor]')){const selected=option.dataset.mapFloor===value;option.classList.toggle('selected',selected);option.setAttribute('aria-pressed',String(selected));}
-  $('map-description').textContent=mapFloor==='overview'?'地下通路・ホーム・改札階を、22か所の階段でひと続きに。':`${mapFloor} · ${floorById[mapFloor].title}（黄色い部分が階段）`;
+  $('map-description').textContent=mapFloor==='overview'?`地下7階から地上2階まで。駅の${ticketGates.length}か所の改札と${stairs.length}か所の階段を歩けます。`:`${mapFloor} · ${floorById[mapFloor].title}（黄色い部分が階段）`;
   updateDestinations();drawMap($('large-map'),true);
 }
-for(const b of document.querySelectorAll('[data-map-floor]'))b.addEventListener('click',()=>setMapFloor(b.dataset.mapFloor));
-for(const b of document.querySelectorAll('[data-view-floor]'))b.addEventListener('click',()=>{setMapFloor(b.dataset.viewFloor);openDialog('map-dialog');});
+function showDirectory(open){
+  directoryOpen=open;
+  $('map-panel').hidden=open;$('gate-panel').hidden=!open;
+  $('mode-map').setAttribute('aria-pressed',String(!open));$('mode-gates').setAttribute('aria-pressed',String(open));
+  if(open)renderGateList();else drawMap($('large-map'),true);
+}
+function inspectGate(g){
+  selectedGate=g;setMapFloor(g.floor);showDirectory(false);
+  $('gate-detail').style.setProperty('--rail',operators[g.operator].color);
+  $('detail-operator').textContent=operators[g.operator].name+'  /  '+g.floor;
+  $('detail-name').textContent=g.name;$('detail-route').textContent=g.toward;
+  $('detail-note').textContent=[isTransfer(g)?'のりかえ改札':'',g.note].filter(Boolean).join(' · ');
+  $('walk-gate').disabled=!world;
+  $('map-dialog').scrollTop=0;
+}
+function renderGateList(){
+  const filter=$('gate-operator').value,query=$('gate-search').value.trim().toLowerCase();
+  const list=$('gate-list');list.replaceChildren();
+  const matching=ticketGates.filter(g=>{
+    const sharedTransfer=isTransfer(g)&&(g.negative===filter||g.positive===filter);
+    const terms=[operators[g.operator].name,g.name,g.toward,g.note,g.floor].join(' ').toLowerCase();
+    return (!filter||g.operator===filter||sharedTransfer)&&terms.includes(query);
+  });
+  $('gate-count').textContent=matching.length+' か所'+(matching.length?'':' · 路線や検索語を変えてください');
+  for(const [id,op] of Object.entries(operators)){
+    const group=matching.filter(g=>g.operator===id);if(!group.length)continue;
+    const heading=document.createElement('h3');heading.className='gate-group';heading.style.setProperty('--rail',op.color);heading.textContent=op.name;list.append(heading);
+    for(const g of group){
+      const row=document.createElement('button');row.className='gate-row';row.style.setProperty('--rail',op.color);
+      row.innerHTML='<span class="gate-mark" aria-hidden="true">▥</span><span><strong>'+g.name+'</strong><small>'+g.floor+' · '+(g.oneWay?g.note:g.toward)+'</small></span><span class="go" aria-hidden="true">→</span>';
+      row.addEventListener('click',()=>inspectGate(g));list.append(row);
+    }
+  }
+}
+for(const [id,op] of Object.entries(operators))$('gate-operator').add(new Option(op.name,id));
+$('gate-total').textContent=ticketGates.length;
+$('gate-search').addEventListener('input',renderGateList);$('gate-operator').addEventListener('change',renderGateList);
+$('mode-map').addEventListener('click',()=>showDirectory(false));$('mode-gates').addEventListener('click',()=>showDirectory(true));
+$('play-gates').addEventListener('click',()=>{showDirectory(true);openDialog('map-dialog');});
+$('walk-gate').addEventListener('click',()=>{if(selectedGate)teleport({...gateApproach(selectedGate),name:selectedGate.name});});
+for(const id of ['overview',...floors.map(f=>f.id).reverse()]){
+  const b=document.createElement('button');b.dataset.mapFloor=id;b.textContent=id==='overview'?'立体':id;
+  b.addEventListener('click',()=>setMapFloor(id));$('floor-tabs').append(b);
+}
+$('current-plan').addEventListener('click',()=>{setMapFloor(position.floor);showDirectory(false);openDialog('map-dialog');});
 $('large-map').addEventListener('click',e=>{
-  if(!world)return;const canvas=$('large-map'),r=canvas.getBoundingClientRect();
+  const canvas=$('large-map'),r=canvas.getBoundingClientRect();
   const x=(e.clientX-r.left)/r.width*canvas.width,y=(e.clientY-r.top)/r.height*canvas.height;
-  const hit=(mapHits.get(canvas)??[]).find(h=>Math.hypot(h.x-x,h.y-y)<19);if(hit)teleport(hit.d);
+  const hit=(mapHits.get(canvas)??[]).map(h=>({h,d:Math.hypot(h.x-x,h.y-y)})).filter(v=>v.d<18).sort((a,b)=>a.d-b.d)[0]?.h;
+  if(hit?.gate)inspectGate(hit.gate);else if(hit?.d&&world)teleport(hit.d);
 });
 $('sensitivity').value=sensitivity;
 $('sensitivity').addEventListener('input',e=>{sensitivity=Number(e.target.value);storePreferences();});
@@ -122,6 +173,16 @@ $('sound').addEventListener('click',async()=>{
   try{if(!audioContext)createAudio();await audioContext.resume();audioEnabled=!audioEnabled;audioGain.gain.setTargetAtTime(audioEnabled ? .28 : 0,audioContext.currentTime,.12);$('sound').setAttribute('aria-pressed',String(audioEnabled));$('sound').setAttribute('aria-label',audioEnabled?'環境音をオフにする':'環境音をオンにする');$('sound').querySelector('use').setAttribute('href',audioEnabled?'#i-volume':'#i-mute');toast(audioEnabled?'環境音をオンにしました':'環境音をオフにしました');}catch{toast('このブラウザでは環境音を再生できません');}
 });
 
+function reportCrossing({gate,zone}){
+  const action=zone==='public'?'を出ました':isTransfer(gate)?' → '+operators[zone].name:'から入りました';
+  toast(gate.name+action);
+  if(!audioEnabled||audioContext?.state!=='running')return;
+  const tone=audioContext.createOscillator(),gain=audioContext.createGain(),now=audioContext.currentTime;
+  tone.frequency.setValueAtTime(980,now);tone.frequency.setValueAtTime(1320,now+.055);
+  gain.gain.setValueAtTime(.09,now);gain.gain.exponentialRampToValueAtTime(.001,now+.13);
+  tone.connect(gain).connect(audioGain);tone.start(now);tone.stop(now+.14);
+  tone.onended=()=>{tone.disconnect();gain.disconnect();};
+}
 function frame(t){
   const dt=Math.min(.045,(t-lastFrame)/1000||.016);lastFrame=t;
   if(started&&!activeDialog&&!document.hidden){
@@ -130,14 +191,16 @@ function frame(t){
     const len=Math.hypot(horizontal,forward);if(len>1){horizontal/=len;forward/=len;}
     const vx=(-Math.sin(yaw)*forward+Math.cos(yaw)*horizontal)*speed,vz=(-Math.cos(yaw)*forward-Math.sin(yaw)*horizontal)*speed;
     const smooth=1-Math.exp(-dt*14);velocity.x+=(vx-velocity.x)*smooth;velocity.z+=(vz-velocity.z)*smooth;
-    const next=movePlayer(position,velocity.x*dt,velocity.z*dt),distance=Math.hypot(next.x-position.x,next.z-position.z);position=next;walked+=distance;stepDistance+=distance;
+    const next=movePlayer(position,velocity.x*dt,velocity.z*dt),distance=Math.hypot(next.x-position.x,next.z-position.z);
+    const crossed=distance>0?gateCrossing(position,next):null;if(crossed)reportCrossing(crossed);
+    position=next;walked+=distance;stepDistance+=distance;
     if(stepDistance>.8){stepDistance=0;footstep();}
     $('walked').textContent=Math.floor(walked);updateLocation();
   }
   world.camera.position.x=position.x;world.camera.position.z=position.z;
   world.camera.position.y+=(position.y+1.65-world.camera.position.y)*(1-Math.exp(-dt*20));
   world.camera.rotation.y=yaw+(!started&&!reducedMotion?Math.sin(t*.00012)*.025:0);world.camera.rotation.x=pitch;
-  if(t-lastMap>180){lastMap=t;drawMap($('mini-map'));if(activeDialog?.id==='map-dialog')drawMap($('large-map'),true);}
+  if(t-lastMap>180){lastMap=t;drawMap($('mini-map'));if(activeDialog?.id==='map-dialog'&&!directoryOpen)drawMap($('large-map'),true);}
   world.render(t);requestAnimationFrame(frame);
 }
 function showError(error){console.error('3D scene could not start',error);$('error').hidden=false;$('intro').hidden=true;$('intro-caption').hidden=true;}
@@ -147,4 +210,4 @@ requestAnimationFrame(()=>{
 });
 $('world').addEventListener('webglcontextlost',e=>{e.preventDefault();stopInput();showError(new Error('WebGL context lost'));});
 window.addEventListener('resize',()=>world?.resize());
-updateDestinations();drawMap($('mini-map'));updateLocation();
+setMapFloor('overview');drawMap($('mini-map'));updateLocation();

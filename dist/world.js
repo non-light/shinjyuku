@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {RoomEnvironment} from './vendor/RoomEnvironment.js';
-import {floors,regions,stairs,platforms,pillars,gates,benches,hasFloorAt,hasCeilingAt,stairHeight} from './layout.js';
-import {plans} from './geometry.js';
+import {floors,floorById,regions,stairs,platforms,pillars,gates,benches,hasFloorAt,hasCeilingAt,stairHeight} from './layout.js';
+import {operators,ticketGates,isTransfer} from './station.js';
+import {plans,bounds} from './geometry.js';
 
 export function createWorld(canvas){
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
@@ -28,17 +29,26 @@ export function createWorld(canvas){
   for(const plan of plans){const f=plan.floor;
     for(const r of plan.patches)quad(floorData,[[r.x0,f.height,r.z0],[r.x0,f.height,r.z1],[r.x1,f.height,r.z1],[r.x1,f.height,r.z0]],[[r.x0/2,r.z0/2],[r.x0/2,r.z1/2],[r.x1/2,r.z1/2],[r.x1/2,r.z0/2]]);
     for(const r of plan.ceilingPatches){const y=f.height+f.ceiling;quad(ceilingData,[[r.x0,y,r.z0],[r.x1,y,r.z0],[r.x1,y,r.z1],[r.x0,y,r.z1]],[[r.x0/2,r.z0/2],[r.x1/2,r.z0/2],[r.x1/2,r.z1/2],[r.x0/2,r.z1/2]]);}
-    if(f.id==='1F')continue; // Platforms open onto the tracks; walking still respects their edges.
-    for(const{a,b,dx}of plan.walls){const y=f.height;quad(wallData,[[a[0],y,a[1]],[b[0],y,b[1]],[b[0],y+f.ceiling,b[1]],[a[0],y+f.ceiling,a[1]]],[[0,0],[.5,0],[.5,f.ceiling/2],[0,f.ceiling/2]]);box((a[0]+b[0])/2,y+.12,(a[1]+b[1])/2,dx?.05:1,.24,dx?1:.05,mats.metal);}
+    for(const {a,b,dx,kind} of plan.walls){
+      if(kind==='platform'||kind==='outdoor')continue;
+      const y=f.height;
+      quad(wallData,[[a[0],y,a[1]],[b[0],y,b[1]],[b[0],y+f.ceiling,b[1]],[a[0],y+f.ceiling,a[1]]],[[0,0],[.5,0],[.5,f.ceiling/2],[0,f.ceiling/2]]);
+      box((a[0]+b[0])/2,y+.12,(a[1]+b[1])/2,dx?.05:1,.24,dx?1:.05,mats.metal);
+    }
+    for(const fence of plan.fences){
+      const {x,y,z,w,d}=fence;
+      box(x,y+.64,z,w,1.28,d,mats.metal);
+      box(x,y+1.32,z,w,.08,d,mats.dark);
+    }
   }
   surface(floorData,floorMat);surface(ceilingData,mats.ceiling);surface(wallData,wallMat);
   const lampLocations=[];
   function lamp(x,z,y=0,alongX=true,length=3.5){box(x,y+3.58,z,alongX?length:.5,.12,alongX?.5:length,mats.dark);box(x,y+3.505,z,alongX?length-.12:.36,.025,alongX?.36:length-.12,mats.light);lampLocations.push(new THREE.Vector3(x,y+3.2,z));}
   for(const f of floors){
-    if(f.id==='1F'){for(const p of platforms)for(let z=p.z0+5;z<p.z1;z+=9)if(hasCeilingAt(p.x,z,f.id))lamp(p.x,z,f.height,false);}
-    else for(let x=-66;x<80;x+=8)for(let z=-20;z<145;z+=8)if(hasCeilingAt(x,z,f.id))lamp(x,z,f.height);
+    for(let x=bounds.x0+4;x<bounds.x1;x+=9)
+      for(let z=bounds.z0+4;z<bounds.z1;z+=9)
+        if(hasCeilingAt(x,z,f.id))lamp(x,z,f.height);
   }
-  for(const r of regions.filter(r=>r.floor!=='1F')){const y=floors.find(f=>f.id===r.floor).height;for(let z=r.z0+2;z<r.z1;z+=4)box((r.x0+r.x1)/2,y+3.7,z,r.x1-r.x0,.12,.09,mats.white);}
   for(const p of platforms)for(let z=p.z0+5;z<p.z1;z+=8)if(hasCeilingAt(p.x,z,'1F'))box(p.x,8.8,z,8,.13,.16,mats.metal);
   const litAreas=[new THREE.PointLight('#fff7df',8,15,2),new THREE.PointLight('#f9fff0',8,15,2)];litAreas.forEach(l=>scene.add(l));
   const tactileTex=texture(128,128,c=>{c.fillStyle='#d8b64f';c.fillRect(0,0,128,128);for(let x=10;x<128;x+=21){c.fillStyle='#efce69';c.fillRect(x,5,8,118);c.fillStyle='#a68a3b';c.fillRect(x+8,5,2,118);}c.strokeStyle='#ad903e';c.strokeRect(0,0,128,128);});
@@ -50,7 +60,7 @@ export function createWorld(canvas){
   const signCache=new Map();
   function signTexture(title,subtitle,arrow='↑',badge='出口'){
     const key=[title,subtitle,arrow,badge].join('|');if(signCache.has(key))return signCache.get(key);
-    const t=texture(896,176,c=>{c.fillStyle='#202725';c.fillRect(0,0,896,176);c.fillStyle='#ecd16e';c.fillRect(0,0,18,176);c.font='64px sans-serif';c.fillText(arrow,35,108);c.fillStyle='#f6f6ed';c.font='500 44px sans-serif';c.fillText(title,132,77);c.fillStyle='#c6cfc0';c.font='22px sans-serif';c.fillText(subtitle,134,121);c.fillStyle='#edcf69';c.fillRect(773,29,94,99);c.fillStyle='#29372b';c.font='500 32px sans-serif';c.fillText(badge,787,92);c.fillStyle='#88917f';c.font='13px sans-serif';c.fillText('SHINJUKU STATION / 3D WALK',134,153);});signCache.set(key,t);return t;
+    const t=texture(640,126,c=>{c.scale(640/896,126/176);c.fillStyle='#202725';c.fillRect(0,0,896,176);c.fillStyle='#ecd16e';c.fillRect(0,0,18,176);c.font='64px sans-serif';c.fillText(arrow,35,108);c.fillStyle='#f6f6ed';c.font='500 44px sans-serif';c.fillText(title,132,77,625);c.fillStyle='#c6cfc0';c.font='22px sans-serif';c.fillText(subtitle,134,121,615);c.fillStyle='#edcf69';c.fillRect(773,29,94,99);c.fillStyle='#29372b';c.font='500 32px sans-serif';c.fillText(badge,784,92,72);c.fillStyle='#88917f';c.font='13px sans-serif';c.fillText('SHINJUKU STATION / 3D WALK',134,153);});signCache.set(key,t);return t;
   }
   function picture(tex,x,y,z,w,h,ry=0,emissive=.16){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({map:tex,emissive:'#ffffff',emissiveMap:tex,emissiveIntensity:emissive,roughness:.65}));mesh.position.set(x,y,z);mesh.rotation.y=ry;scene.add(mesh);return mesh;}
   function hanging(x,z,title,sub,backTitle=title,backSub=sub,ry=0,y=0,w=6,badge='出口'){
@@ -60,12 +70,29 @@ export function createWorld(canvas){
   }
   hanging(-35,-2,'東口・東西自由通路','East Exit / Passage','西口','West Exit',-Math.PI/2);
   hanging(40,-2,'東口','East Exit','西口・東西自由通路','West Exit / Passage',-Math.PI/2);
-  hanging(-58,8,'中央地下通路・JR改札','Central passage / JR gate','東西自由通路','East–west passage',Math.PI);
-  hanging(70,8,'JR線・中央地下通路','JR Lines / Central passage','東口・東西自由通路','East Exit / Passage',Math.PI);
-  hanging(0,18,'1F JR線ホーム','JR platforms upstairs','地下改札','Underground gates',-Math.PI/2,0,6.3,'JR');
-  hanging(-52,48,'南改札・南口','South gate','1F JR線ホーム','JR platforms downstairs',Math.PI/2,10,6.5,'2F');
-  hanging(-39,132,'新南改札','New South gate','1F JR線ホーム','JR platforms downstairs',0,10,6,'2F');
-  hanging(69,136,'ミライナタワー改札','Miraina Tower gate','新南改札','New South gate',-Math.PI/2,10,6.5,'2F');
+  hanging(68,-9,'東口・歌舞伎町方面','西武新宿方面は、改札外の階段へ','東改札・東西自由通路','JR East Gate / Passage',Math.PI,0,6);
+  hanging(70,-34,'歌舞伎町・西武新宿方面','East exit plaza / toward Kabukicho','JR新宿駅 東口','地下の東改札へ',Math.PI,5,6.5,'東口');
+  hanging(0,18,'JR線 各ホーム','JR platforms upstairs','中央地下通路','Central passage',-Math.PI/2,0,6.3,'JR');
+  for(const g of ticketGates){
+    const op=operators[g.operator],ry=g.axis==='x'?Math.PI/2:0;
+    const positiveLabel=g.oneWay===1?'進入不可':g.name,negativeLabel=g.oneWay===-1?'進入不可':g.name;
+    const label=isTransfer(g)?'乗換':g.oneWay?'出場':'改札';
+    hanging(g.x,g.z,positiveLabel,op.name+' · '+g.toward,negativeLabel,op.name+' · '+g.toward,ry,floorById[g.floor].height,7.6,label);
+  }
+  // Mark the public plaza with original storefronts beyond its walkable footprint.
+  const facade=mat('#727e83'),sandstone=mat('#d1c3aa');
+  for(let i=0;i<5;i++){
+    const x=65+i*7,y=5,h=8+(i%3)*3;
+    box(x,y+h/2,-64,6.6,h,5,i%2?facade:sandstone);
+    for(let row=0;row<Math.floor(h/2);row++)box(x,y+1.6+row*2,-61.47,5.5,.95,.08,mats.glass);
+  }
+  for(const r of regions.filter(r=>r.kind==='rail')){
+    const y=floorById[r.floor].height,alongX=r.x1-r.x0>r.z1-r.z0;
+    const x=(r.x0+r.x1)/2,z=(r.z0+r.z1)/2;
+    hanging(x,z,r.name,r.floor+'  ·  新宿駅',r.name,'Shinjuku Station',alongX?Math.PI/2:0,y,5.8,r.floor);
+    if(alongX)box(x,y+.025,r.z0+1,r.x1-r.x0-2,.035,.42,tactileMat);
+    else box(r.x0+1,y+.025,z,.42,.035,r.z1-r.z0-2,tactileMat);
+  }
   const railMat=mat('#bcc0bb',.25,.8),railMatrices=[];
   function rail(a,b,r=.035){const d=new THREE.Vector3().subVectors(b,a),length=d.length(),mid=a.clone().add(b).multiplyScalar(.5),rotation=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());railMatrices.push(new THREE.Matrix4().compose(mid,rotation,new THREE.Vector3(r,length,r)));}
   // Each staircase has two flights, a 2m landing, matching holes, handrails and signs.
@@ -80,7 +107,7 @@ export function createWorld(canvas){
       for(const side of[-1,1])rail(new THREE.Vector3(s.x+side*1.95,ya+.95,at(a)),new THREE.Vector3(s.x+side*1.95,yb+.95,at(b)));
     }
     for(const side of[-1,1])for(let d=0;d<=14;d+=2){const y=stairHeight(s,s.x,at(d));rail(new THREE.Vector3(s.x+side*1.95,y,at(d)),new THREE.Vector3(s.x+side*1.95,y+.95,at(d)),.022);}
-    hanging(s.x,s.z0-direction*.65,`${s.to} ${s.to==='1F'?'JRホーム':'改札階'}`,s.label,`${s.to} へ上がる`,s.label,0,s.y0,3.8,s.to);
+    hanging(s.x,s.z0-direction*.65,`${s.to} へ上がる`,s.label,`${s.to} へ上がる`,s.label,0,s.y0,3.8,s.to);
     hanging(s.x,s.z1+direction*.65,`${s.from} へ下りる`,s.label,`${s.from} へ下りる`,s.label,0,s.y1,3.8,s.from);
     lamp(s.x,at(7),s.y0+2.5,false,1.5);
   }
@@ -95,7 +122,8 @@ export function createWorld(canvas){
     if(!pillarLabels.has(p.floor))pillarLabels.set(p.floor,texture(256,256,c=>{c.fillStyle='#e9ebe2';c.fillRect(0,0,256,256);c.fillStyle='#829d5d';c.fillRect(0,0,256,15);c.fillStyle='#29392f';c.font='500 52px sans-serif';c.fillText('新 宿',28,93);c.font='22px sans-serif';c.fillText('SHINJUKU',42,140);c.font='37px sans-serif';c.fillText(p.floor,97,209);}));
     picture(pillarLabels.get(p.floor),p.x-.458,p.y+1.94,p.z,.65,.65,-Math.PI/2);
   }
-  for(const g of gates){const rotate=g.axis==='z'?Math.PI/2:0;box(g.x,g.y+.54,g.z,2.1,1.08,.8,mats.metal,rotate);box(g.x,g.y+1.105,g.z,2.12,.13,.82,mats.dark,rotate);box(g.x,g.y+1.19,g.z,.5,.08,.55,mats.green);shadow(g.x,g.z,g.axis==='x'?3.5:1.8,g.axis==='x'?1.8:3.5,g.y);}
+  const operatorMaterials=Object.fromEntries(Object.entries(operators).map(([id,op])=>[id,mat(op.color,.42,.2)]));
+  for(const g of gates){const stripe=operatorMaterials[ticketGates.find(bank=>bank.id===g.gateId).operator];const rotate=g.axis==='z'?Math.PI/2:0;box(g.x,g.y+.54,g.z,2.1,1.08,.8,mats.metal,rotate);box(g.x,g.y+1.105,g.z,2.12,.13,.82,mats.dark,rotate);box(g.x,g.y+1.19,g.z,.5,.08,.55,mats.green,rotate);box(g.x,g.y+.83,g.z,2.13,.18,.85,stripe,rotate);shadow(g.x,g.z,g.axis==='x'?3.5:1.8,g.axis==='x'?1.8:3.5,g.y);}
   for(const b of benches){box(b.x,b.y+.49,b.z,b.w,.12,1.05,mats.wood);box(b.x,b.y+.93,b.z+.46,b.w,.75,.1,mats.wood);for(const a of[-1,1])box(b.x+a*(b.w/2-.5),b.y+.23,b.z,.12,.5,.8,mats.metal);shadow(b.x,b.z,b.w+1,2.5,b.y);}
   const lockerTex=texture(512,512,c=>{c.fillStyle='#bfc3bb';c.fillRect(0,0,512,512);for(let x=0;x<4;x++)for(let y=0;y<3;y++){const a=x*128,b=y*171;c.fillStyle=['#c1c8be','#ccd0c5','#b3beb4'][(x+y)%3];c.fillRect(a+3,b+3,122,165);c.strokeStyle='#808d7b';c.strokeRect(a+3,b+3,122,165);c.fillStyle='#6b796a';c.fillRect(a+104,b+74,8,25);c.font='15px sans-serif';c.fillText(String(100+x+y*4),a+10,b+23);}});picture(lockerTex,71,1.3,-19.97,8,2.6);
   function vendingTexture(){return texture(512,1024,c=>{

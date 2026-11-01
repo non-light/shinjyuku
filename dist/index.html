@@ -31,7 +31,7 @@
   <div class="vignette" aria-hidden="true"></div>
   <header class="topbar">
     <a class="brand" href="./" aria-label="新宿さんぽのはじめに戻る"><span class="brand-mark" aria-hidden="true">新</span><span><strong>新宿さんぽ</strong><small>SHINJUKU STATION WALK</small></span></a>
-    <div class="top-actions"><span class="prototype">PROTOTYPE <span>02</span></span><button class="icon-button" id="settings" aria-label="散策の設定"><svg><use href="#i-settings"/></svg></button><button class="icon-button" id="about" aria-label="このモデルについて"><svg><use href="#i-info"/></svg></button></div>
+    <div class="top-actions"><span class="prototype">PROTOTYPE <span>03</span></span><button class="icon-button" id="settings" aria-label="散策の設定"><svg><use href="#i-settings"/></svg></button><button class="icon-button" id="about" aria-label="このモデルについて"><svg><use href="#i-info"/></svg></button></div>
   </header>
   <div class="location"><span id="floor">B1</span><div><small>いま歩いている場所</small><strong id="location">東西の通路</strong></div><span class="location-dot" aria-hidden="true"></span></div>
   <button class="mini-map" id="mini-map-button" aria-label="エリアマップを開く"><div class="map-top"><span>AREA MAP</span><span>＋</span></div><canvas id="mini-map" width="360" height="256"></canvas><div class="map-bottom"><span><i></i>あなたの位置</span><span>簡略モデル</span></div></button>
@@ -45,9 +45,9 @@
   <div class="intro-caption" id="intro-caption"><span class="caption-line"></span><div><strong>どこへ向かうかは、あなた次第。</strong><small>EXPLORE AT YOUR OWN PACE</small></div></div>
   <div id="play-ui" class="play-ui" hidden>
     <div class="reticle" aria-hidden="true"></div>
-    <nav class="floor-stack" aria-label="フロアのつながり"><button data-view-floor="2F" aria-label="2Fのマップを見る"><b>2F</b><span>南・新南改札</span></button><i>↕</i><button data-view-floor="1F" aria-label="1Fのマップを見る"><b>1F</b><span>ホーム</span></button><i>↕</i><button data-view-floor="B1" class="active" aria-label="B1のマップを見る"><b>B1</b><span>地下通路</span></button></nav>
+    <nav class="floor-stack" aria-label="現在階のマップ"><button id="current-plan"><b id="current-floor-badge">B1</b><span>この階の地図</span></button><button id="play-gates"><b>▥</b><span>改札一覧</span></button></nav>
     <div class="connection-hint" id="connection-hint" hidden></div>
-    <div class="walk-stats"><span id="walked">0</span><small>m さんぽ</small><span class="stat-divider"></span><small id="visited">0 / 10 エリア</small></div>
+    <div class="walk-stats"><span id="walked">0</span><small>m さんぽ</small><span class="stat-divider"></span><small id="visited">散策エリア</small></div>
     <div class="look-hint" id="look-hint">画面をドラッグして、見回そう</div>
     <div class="joystick-wrap"><div id="joystick" class="joystick" role="group" aria-label="移動スティック。上下左右にドラッグして移動"><span class="joy-up">⌃</span><span class="joy-down">⌄</span><span class="joy-left">‹</span><span class="joy-right">›</span><div id="stick" class="stick"></div></div><span class="control-label">歩く</span></div>
     <div class="right-controls"><button class="round-button" id="sound" aria-label="環境音をオンにする" aria-pressed="false"><svg><use href="#i-mute"/></svg></button><button class="round-button" id="reset" aria-label="スタート地点に戻る"><svg><use href="#i-reset"/></svg></button><button class="round-button map-button" id="open-map" aria-label="エリアマップを開く"><svg><use href="#i-map"/></svg><span>マップ</span></button></div>
@@ -55,16 +55,28 @@
   </div>
   <div class="model-label">空間・内装は試作モデル <span>·</span> 実際の駅の案内には使えません</div>
   <div class="toast" id="toast" role="status"></div>
-  <section id="error" class="error" hidden><strong>3D画面を開けませんでした</strong><p>WebGL 2に対応したブラウザで開き直してください。</p><button class="primary" onclick="location.reload()">もう一度読み込む</button></section>
+  <section id="error" class="error" hidden><strong>3D画面を開けませんでした</strong><p>WebGL 2に対応したブラウザで開き直してください。</p><button class="primary" onclick="location.reload()">もう一度読み込む</button><button id="error-map" class="text-button">改札マップを見る</button></section>
 </main>
-<dialog id="map-dialog" class="sheet map-sheet"><div class="sheet-header"><div><span class="eyebrow">ONE STATION, THREE FLOORS</span><h2>ひと続きの、新宿駅。</h2></div><button class="icon-button close-dialog" aria-label="マップを閉じる"><svg><use href="#i-close"/></svg></button></div>
-<p class="sheet-lead" id="map-description">地下通路・ホーム・改札階を、22か所の階段でひと続きに。</p>
-<div class="floor-tabs" role="group" aria-label="マップの表示階"><button data-map-floor="overview" class="selected" aria-pressed="true">立体</button><button data-map-floor="B1" aria-pressed="false">B1 <small>地下通路</small></button><button data-map-floor="1F" aria-pressed="false">1F <small>ホーム</small></button><button data-map-floor="2F" aria-pressed="false">2F <small>改札階</small></button></div>
-<div class="large-map-wrap"><canvas id="large-map" width="860" height="640" aria-label="階段でつながったB1・1F・2Fの立体マップ"></canvas><span>JR新宿駅の3層をもとにした模式図 · 寸法・位置は簡略化しています</span></div>
-<div class="connection-summary"><span><i></i>黄色＝歩ける階段</span><span>B1 ↔ 1F ↔ 2F</span></div>
-<p class="map-help">番号の場所へ移動できます。どの場所も、階段と通路を歩いて行き来できます。</p><div id="destination-list" class="destinations"></div></dialog>
+<dialog id="map-dialog" class="sheet map-sheet"><div class="sheet-header"><div><span class="eyebrow">SHINJUKU STATION GUIDE</span><h2>新宿駅の構内案内</h2></div><button class="icon-button close-dialog" aria-label="マップを閉じる"><svg><use href="#i-close"/></svg></button></div>
+<div class="map-modes" role="group" aria-label="案内の種類"><button id="mode-map" aria-pressed="true">構内マップ</button><button id="mode-gates" aria-pressed="false">改札一覧 <b id="gate-total"></b></button></div>
+<div id="map-panel">
+<p class="sheet-lead" id="map-description"></p>
+<div class="floor-tabs" id="floor-tabs" role="group" aria-label="マップの表示階"></div>
+<div class="large-map-wrap"><canvas id="large-map" width="860" height="620" aria-label="新宿駅の改札・ホーム・出口をつなぐ立体マップ"></canvas><span>鉄道各社の構内図に基づく散策用の模式図</span></div>
+<div class="connection-summary"><span><i></i>階段</span><span><b class="gate-key">▥</b> 改札</span><span>● 現在地</span></div>
+<div id="gate-detail" class="gate-detail" hidden><div><span id="detail-operator" class="gate-kicker"></span><h3 id="detail-name"></h3><p id="detail-route"></p><small id="detail-note"></small></div><button id="walk-gate">ここから歩く <span>→</span></button></div>
+<p class="map-help">各階の地図で四角い改札マークをタップすると、名前と行き先がわかります。丸い番号は散策地点です。</p><div id="destination-list" class="destinations"></div></div>
+<div id="gate-panel" hidden><p class="sheet-lead">路線や名前から改札を探し、地図で位置を確認できます。</p>
+<div class="gate-filters"><label>路線<select id="gate-operator"><option value="">すべての路線</option></select></label><label>改札名・行き先<input type="search" id="gate-search" placeholder="例：東改札、歌舞伎町"></label></div>
+<div id="gate-count" class="gate-count" aria-live="polite"></div><div id="gate-list"></div>
+<p class="sheet-footnote">乗換改札は両社で共用します。散策では営業時間のある改札も開放し、出場専用口は一方向に通れます。</p></div></dialog>
 <dialog id="settings-dialog" class="sheet"><div class="sheet-header"><div><span class="eyebrow">MAKE YOURSELF COMFORTABLE</span><h2>心地よい、さんぽに。</h2></div><button class="icon-button close-dialog" aria-label="設定を閉じる"><svg><use href="#i-close"/></svg></button></div><label class="setting-row" for="sensitivity"><span><strong>視点の動く速さ</strong><small>ゆっくり ← → すばやく</small></span><input id="sensitivity" type="range" min="0.4" max="1.8" step="0.1" value="1"></label><div class="setting-row"><span><strong>歩く速さ</strong><small>景色を楽しむなら、ゆっくり。</small></span><div class="segmented" id="speed-options"><button data-value="1.5">ゆっくり</button><button data-value="2.8" class="selected" aria-pressed="true">ふつう</button></div></div><div class="setting-row"><span><strong>描画の細かさ</strong><small>重く感じたら、軽量に。</small></span><div class="segmented" id="quality-options"><button data-value="1">軽量</button><button data-value="1.5" class="selected" aria-pressed="true">標準</button></div></div><button class="text-button" id="fullscreen"><svg><use href="#i-expand"/></svg>全画面で散策する</button><p class="sheet-footnote">画面の上下動は抑えてあります。スマホは縦向き・横向き、どちらでも遊べます。</p></dialog>
-<dialog id="about-dialog" class="sheet"><div class="sheet-header"><div><span class="eyebrow">ABOUT THIS WALK</span><h2>この小さな駅について。</h2></div><button class="icon-button close-dialog" aria-label="説明を閉じる"><svg><use href="#i-close"/></svg></button></div><p>新宿駅の雰囲気を、スマートフォンで歩いて楽しむための開発初期のプロトタイプです。JR新宿駅の地下通路（B1）・ホーム（1F）・南口側の改札階（2F）を、22か所の階段でつないでいます。</p><div class="info-box"><strong>今のモデルの再現範囲</strong><p>JR東日本の公開構内図で階層とホームの構成を確認し、散策用の模式モデルにしています。通路の寸法・階高・階段の位置・内装は簡略化しています。私鉄・地下鉄のホームは未収録です。実測モデルではないため、現地での経路案内には利用できません。</p></div><h3>あそびかた</h3><p>左のスティックで歩き、画面をドラッグして見回します。パソコンではWASD・矢印キーでも移動できます。マップの「立体」で全階のつながりを確認でき、「B1」「1F」「2F」で各階を見られます。階段はそのまま歩いて上り下りできます。</p><h3>リアルな新宿駅へ育てるために</h3><p>公開されている屋内地図データで通路の配置を整え、現地素材で内装や案内板を再現していく構想です。JRの階層構成は公式構内図を参考にしています。寸法の正確な再現に向け、屋内地図データの導入も検討しています。</p><a class="source-link" href="https://www.jreast.co.jp/estation/stations/866.html" target="_blank" rel="noopener">JR東日本 · 新宿駅の構内図・バリアフリー情報 ↗</a><a class="source-link" href="https://www.mlit.go.jp/kokudoseisaku/kokudoseisaku_tk1_000108.html" target="_blank" rel="noopener">国土交通省 · 屋内電子地図の公開 ↗</a><a class="source-link" href="https://www.toshiseibi.metro.tokyo.lg.jp/kotsu_butsuryu/kotsuseisaku/kotsu_suishin/shinjuku_shisetsu" target="_blank" rel="noopener">東京都 · 新宿駅周辺の施設情報 ↗</a><p class="sheet-footnote">3D描画：Three.js（MIT） · 内装・テクスチャ・音は本試作用に作成。<br>非公式の開発試作です。鉄道各社による提供・監修はありません。</p></dialog>
+<dialog id="about-dialog" class="sheet"><div class="sheet-header"><div><span class="eyebrow">ABOUT THIS WALK</span><h2>この小さな駅について。</h2></div><button class="icon-button close-dialog" aria-label="説明を閉じる"><svg><use href="#i-close"/></svg></button></div><p>JR・小田急・京王・都営・東京メトロの新宿駅を、階段でつないだ散策用3Dモデルです。改札機の間を歩いて、改札外の通路や別の路線に出られます。</p><div class="info-box"><strong>再現の範囲</strong><p>鉄道各社の新宿駅の改札、乗換口、ホームへのつながりを収録しています。新宿三丁目駅・新宿西口駅・西武新宿駅は別駅です。床の高さ、通路、ホームの形、階段、建物の位置や内装は散策用に簡略化しています。</p></div><h3>あそびかた</h3><p>左のスティックで歩き、画面をドラッグして見回します。パソコンではWASD・矢印キーでも歩けます。マップの「改札一覧」で行き先を選び、「ここから歩く」を押すとその改札前から始められます。</p><h3>参照した駅構内図</h3>
+<a class="source-link" href="https://www.jreast.co.jp/estation/stations/866.html" target="_blank" rel="noopener">JR東日本 ↗</a>
+<a class="source-link" href="https://www.odakyu.jp/station/shinjuku/homeview/" target="_blank" rel="noopener">小田急電鉄 ↗</a>
+<a class="source-link" href="https://www.keio.co.jp/train/station/ko01_shinjuku/" target="_blank" rel="noopener">京王電鉄 ↗</a>
+<a class="source-link" href="https://www.kotsu.metro.tokyo.jp/subway/stations/shinjuku.html" target="_blank" rel="noopener">東京都交通局 ↗</a>
+<a class="source-link" href="https://www.tokyometro.jp/station/shinjuku/yardmap/index_print.html" target="_blank" rel="noopener">東京メトロ ↗</a><p class="sheet-footnote">3D描画：Three.js（MIT） · 内装・テクスチャ・音は本試作用に作成。<br>非公式の開発試作です。鉄道各社による提供・監修はありません。</p></dialog>
 <script type="module" src="./app.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
-import {floors,floorById,stairs,platforms,pillars,destinations,stairHeight} from './layout.js';
+import {operators,ticketGates} from './station.js';
+import {stairs,platforms,pillars,destinations,stairHeight} from './layout.js';
 import {plans} from './geometry.js';
 export const mapHits=new WeakMap();
 const corners=r=>[[r.x0,r.z0],[r.x1,r.z0],[r.x1,r.z1],[r.x0,r.z1]];
@@ -8,12 +9,16 @@ function transformFor(canvas,points,padding=30){const xs=points.map(p=>p[0]),ys=
 function dot(c,xy,r,color){c.beginPath();c.arc(...xy,r,0,Math.PI*2);c.fillStyle=color;c.fill();}
 function player(c,xy,yaw,large){c.save();c.translate(...xy);c.rotate(-yaw);c.fillStyle='#53672b35';c.beginPath();c.moveTo(0,0);c.lineTo(-12,-24);c.quadraticCurveTo(0,-31,12,-24);c.closePath();c.fill();dot(c,[0,0],large?6:5,'#526b2c');c.strokeStyle='#fcfff6';c.lineWidth=2;c.stroke();c.restore();}
 function base(canvas){const c=canvas.getContext('2d');c.clearRect(0,0,canvas.width,canvas.height);c.fillStyle='#f0efe7';c.fillRect(0,0,canvas.width,canvas.height);return c;}
-export function drawFloorMap(canvas,position,visited,floorId,large=false){
+export function drawFloorMap(canvas,position,visited,floorId,large=false,selectedGate=null){
   const c=base(canvas),plan=plans.find(p=>p.floor.id===floorId),f=plan.floor;
   const connections=stairs.filter(s=>s.from===floorId||s.to===floorId);
   const allPoints=[...plan.patches.flatMap(corners),...connections.flatMap(stairPoints)];
   const project=transformFor(canvas,allPoints,large?48:23),hits=[];
-  for(const r of plan.patches){path(c,corners(r).map(project));c.fillStyle=f.color;c.fill();}
+  const zoneColors={public:'#ced3be',jr:'#9fb594',odakyu:'#a3c3cc',keio:'#bcb1bd',metro:'#cda99b'};
+  for(const r of plan.zonePatches){path(c,corners(r).map(project));c.fillStyle=zoneColors[r.zone]??f.color;c.fill();}
+  c.beginPath();
+  for(const b of plan.fences){const dx=b.axis==='z'?.5:0,dz=b.axis==='x'?.5:0;c.moveTo(...project([b.x-dx,b.z-dz]));c.lineTo(...project([b.x+dx,b.z+dz]));}
+  c.lineWidth=large?1.5:.7;c.strokeStyle='#79816c';c.stroke();
   for(const s of connections){path(c,stairPoints(s).map(project));c.fillStyle='#d8bb67';c.fill();c.strokeStyle='#a18b4f';c.lineWidth=large?1.3:.7;c.stroke();
     for(let i=0;i<=14;i++){const z=s.z0+(s.z1-s.z0)*i/14;c.beginPath();c.moveTo(...project([s.x-s.width/2,z]));c.lineTo(...project([s.x+s.width/2,z]));c.stroke();}
     if(large){const xy=project([s.x,s.from===floorId?s.z0:s.z1]);c.fillStyle='#685b33';c.font='13px sans-serif';c.textAlign='center';c.fillText(s.from===floorId?'↑':'↓',xy[0],xy[1]-8);}
@@ -21,12 +26,26 @@ export function drawFloorMap(canvas,position,visited,floorId,large=false){
   for(const p of pillars.filter(p=>p.floor===floorId)){const xy=project([p.x,p.z]);c.fillStyle='#6f806c';c.fillRect(xy[0]-1.6,xy[1]-1.6,3.2,3.2);}
   if(large&&floorId==='1F')for(const p of platforms){const xy=project([p.x,p.id==='p5'?108:2]);c.font='16px sans-serif';c.textAlign='center';c.fillStyle='#49615b';p.numbers.split('・').forEach((n,i)=>c.fillText(n,xy[0],xy[1]+i*17-6));}
   destinations.forEach((d,i)=>{if(d.floor!==floorId)return;const xy=project([d.x,d.z]);hits.push({d,x:xy[0],y:xy[1]});dot(c,xy,large?12:5,visited.has(d.id)?'#6d824b':'#f8f9ee');if(large){c.fillStyle=visited.has(d.id)?'#fff':'#5d7050';c.font='14px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(String(i+1),...xy);c.textBaseline='alphabetic';}});
+  const visibleGates=ticketGates.filter(g=>g.floor===floorId);
+  for(const g of visibleGates){
+    const [mx,my]=project([g.x,g.z]),r=large?8:3;
+    c.fillStyle=operators[g.operator].color;c.fillRect(mx-r,my-r,2*r,2*r);
+    c.strokeStyle='#fffdf0';c.lineWidth=large?1.5:1;c.strokeRect(mx-r,my-r,2*r,2*r);
+    if(large){c.fillStyle='#fffdf0';for(const offset of [-3,0,3])c.fillRect(mx+offset-0.6,my-3,1.2,6);hits.push({gate:g,x:mx,y:my});}
+  }
+  if(large&&selectedGate?.floor===floorId){
+    const [mx,my]=project([selectedGate.x,selectedGate.z]);
+    c.strokeStyle='#263b31';c.lineWidth=3;c.strokeRect(mx-11,my-11,22,22);
+    c.font='bold 17px sans-serif';const w=c.measureText(selectedGate.name).width+18;
+    const left=Math.max(6,Math.min(canvas.width-w-6,mx-w/2)),top=my>72?my-42:my+16;
+    c.fillStyle='#263b31';c.fillRect(left,top,w,25);c.fillStyle='white';c.textAlign='left';c.fillText(selectedGate.name,left+9,top+18);
+  }
   if(position.floor===floorId)player(c,project([position.x,position.z]),position.yaw,large);
   c.fillStyle='#68785c';c.font=large?'17px sans-serif':'12px sans-serif';c.textAlign='left';c.fillText(`${floorId}${large?'  '+f.title:''}`,large?22:12,large?27:16);
   c.textAlign='right';c.fillStyle='#8b9581';c.font=large?'14px sans-serif':'11px sans-serif';c.fillText('N ↑',canvas.width-16,large?27:16);mapHits.set(canvas,hits);
 }
 export function drawOverview(canvas,position,visited){
-  const c=base(canvas),iso=([x,z,y])=>[x+.42*z,z*.42-y*15];
+  const c=base(canvas),iso=([x,z,y])=>[x+.42*z,z*.42-y*9];
   const points=plans.flatMap(p=>p.patches.flatMap(r=>corners(r).map(([x,z])=>iso([x,z,p.floor.height]))));
   const fit=transformFor(canvas,points,56),project=(x,z,y)=>fit(iso([x,z,y])),hits=[];
   for(const plan of plans){const f=plan.floor;
@@ -35,7 +54,8 @@ export function drawOverview(canvas,position,visited){
     for(const s of stairs.filter(s=>s.from===f.id)){
       for(let i=0;i<28;i++){const za=s.z0+(s.z1-s.z0)*i/28,zb=s.z0+(s.z1-s.z0)*(i+1)/28,ya=stairHeight(s,s.x,za),yb=stairHeight(s,s.x,zb);path(c,[project(s.x-2,za,ya),project(s.x+2,za,ya),project(s.x+2,zb,yb),project(s.x-2,zb,yb)]);c.fillStyle='#dec36e';c.fill();c.strokeStyle='#9c8244';c.lineWidth=.6;c.stroke();}
     }
-    const label=project(-77,f.id==='B1'?-8:f.id==='1F'?0:45,f.height);c.fillStyle='#52634b';c.font='600 22px sans-serif';c.textAlign='left';c.fillText(f.id,label[0],label[1]-9);c.font='14px sans-serif';c.fillText(f.id==='B1'?'地下通路':f.id==='1F'?'ホーム':'改札階',label[0],label[1]+12);
+    const focus=plan.patches.reduce((min,r)=>Math.min(min,r.z0),Infinity);
+    const labelY=project(0,focus,f.height)[1]-5;c.fillStyle='#405343';c.font='bold 17px sans-serif';c.textAlign='left';c.fillText(f.id,12,labelY);
     for(const[d,i]of destinations.map((d,i)=>[d,i]).filter(([d])=>d.floor===f.id)){const xy=project(d.x,d.z,f.height);dot(c,xy,10,visited.has(d.id)?'#6c7f45':'#f9faed');c.fillStyle=visited.has(d.id)?'#fff':'#6b7958';c.font='12px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(String(i+1),...xy);c.textBaseline='alphabetic';hits.push({d,x:xy[0],y:xy[1]});}
   }
   player(c,project(position.x,position.z,position.y),position.yaw,true);

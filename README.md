@@ -1,47 +1,68 @@
 # 新宿さんぽ / Shinjuku Station Walk
 
-A mobile-first, buildless Three.js exploration prototype. All station geometry,
-signage and textures are original illustrative models, **not a reconstruction of
-Shinjuku Station's actual layout**. The B1 / 1F / 2F organization and platform numbering are based on the JR East
-station diagrams checked on 2026-11-01. Dimensions and connection positions are
-simplified. Private railways and subway platforms are not yet included.
-Surveyed indoor map datasets have not been imported. Do not use this app for real-world navigation.
+A mobile-first, buildless Three.js walking model of Shinjuku Station. Walk through
+27 named gate groups, between the JR platforms and concourses, and out to the East
+Exit plaza toward Kabukicho. The model covers B7 through 2F. Geometry, heights,
+stair positions and interiors are original, simplified illustrations.
 
-## Features
+## Gates and connections
 
-- Real-time 3D station interior, material textures, soft lighting and metallic surfaces.
-- Touch joystick and simultaneous touch camera look; keyboard and mouse controls.
-- Three connected floors, eight platform islands, ten destinations and 22 two-flight staircases.
-- Layer-aware collision, matching floor/ceiling openings, handrails and landing headroom.
-- A unified cutaway map plus per-floor maps generated from the same data as the 3D scene.
-- Minimap, destination switching, local visit history, walking and rendering preferences.
-- Optional synthesized ambient sound and footsteps; no external audio assets.
-- Locally hosted Three.js 0.180.0 (MIT). No runtime CDN or map API dependencies.
+| Gate group | Distinct locations |
+| --- | ---: |
+| JR East, including two Odakyu transfer gates and one Keio transfer gate | 13 |
+| Odakyu public gates | 3 |
+| Keio Line public gates | 5 |
+| Shared Keio New Line / Toei Shinjuku Line public gates | 2 |
+| Toei Oedo Line public gates | 2 |
+| Tokyo Metro Marunouchi Line public gates | 2 |
 
-## Development
+The gate directory supports railway and destination searches. Select a gate to see
+its floor, nearby destinations and approach point. Transfer gates connect paid
+areas directly. The East–West Passage remains outside the gates. Keio's Plaza and
+Temporary gates allow exit only. Posted hours are informational in this walking
+model, which keeps time-limited gates available to explore.
 
-The served application is `dist/`. No build is needed. Vendor Three.js files are
-included for reliable serving. `npm install` is only needed when refreshing vendors.
+Floor plans, gate banks, fare boundaries and stair openings in the 3D scene and
+map share a layout. All 51 staircases can be walked up and down. Separate
+facilities include the Keio/Odakyu underground and ground-level platforms, the
+Marunouchi Line, the Keio New/Toei Shinjuku platform at B5, the Oedo platform at
+B7 and the inside-fare transfer at B4. Seibu-Shinjuku, Shinjuku-nishiguchi and
+Shinjuku-sanchome are separate stations outside this model.
 
-Run navigation and connectivity checks: `node --test test/navigation.test.mjs`.
-The tests traverse all 22 staircases in both directions and perform a walking
-graph search from the starting point to all ten destinations and all eight platforms.
-They also check render openings, headroom, floor isolation, and collision barriers.
-Run syntax checks: `node --check dist/app.js` and `node --check dist/world.js`.
+## Run locally
 
-Serve `dist/` over HTTP for local development:\n\n```sh\npython3 -m http.server 8000 --directory dist\n```\n\nOpen http://localhost:8000/ in your browser. The application needs WebGL 2.\n\nHosted preview: https://shinjuku-station-walk-non.coatedant.chatgpt.site\n\nThis repository contains the connected B1 / 1F / 2F map (source revision `2eea64acdb662791df1205155a4e2cd81bdfd954`).
+The application is served from dist with no build step. Three.js 0.180.0 (MIT)
+is vendored for offline asset loading. From the repository root run
 
-## Toward an accurate station
+```sh
+python3 -m http.server 8000 --directory dist
+```
 
-1. Import and version licensed indoor map geometry and floor connections.
-2. Verify routes against current construction and official station diagrams.
-3. Add calibrated interior models, surveyed heights, and permitted photographic assets.
-4. Profile on physical iPhone and Android devices before release.
-5. Wrap as an app or extend the web app after validating touch interaction.
+Open [the local app](http://localhost:8000). Drag the touch stick to walk and
+drag the scene to look around. Desktop controls include WASD and the arrow keys.
+The 3D walk requires WebGL 2. The maps and gate directory also work in 2D.
 
-References (floor organization only; original images are not reproduced in the app):
-- https://www.jreast.co.jp/estation/stations/866.html
-- https://www.mlit.go.jp/kokudoseisaku/kokudoseisaku_tk1_000108.html
-- https://www.toshiseibi.metro.tokyo.lg.jp/kotsu_butsuryu/kotsuseisaku/kotsu_suishin/shinjuku_shisetsu
+Run the navigation tests with `node --test test/navigation.test.mjs`. They check
+each gate in both directions, stair landings, headroom and openings, and walking
+reachability from the west concourse to both sides of all gates and every
+destination. The platform-to-Kabukicho test walks through the east gate and up
+the exterior stairs.
+
+[Open the hosted app](https://shinjuku-station-walk-non.coatedant.chatgpt.site)
+
+## Railway references
+
+Gate names and connections are based on the operators' station guides. The model
+uses original geometry and artwork and is intended for exploration. Consult the
+official diagrams for on-site navigation and current opening times.
+
+- [JR East station diagrams](https://www.jreast.co.jp/estation/stations/866.html)
+- [JR gate groups in the station profile](https://www.jeki.co.jp/transit_ad/pdf/jml_data_004.pdf)
+- [JR route to the Kabukicho side](https://media.jreast.co.jp/articles/5642)
+- [Odakyu station diagrams](https://www.odakyu.jp/station/shinjuku/homeview/)
+- [Keio Line floor map](https://www.keio.co.jp/train/station/station_map/pdf/ko01_shinjuku_floor_map.pdf)
+- [Keio New Line floor map](https://www.keio.co.jp/train/station/station_map/pdf/ko01_newline_shinjuku_floor_map.pdf)
+- [Toei Subway station diagram](https://www.kotsu.metro.tokyo.jp/subway/stations/shinjuku.html)
+- [Tokyo Metro station diagram](https://www.tokyometro.jp/station/shinjuku/yardmap/index_print.html)
 
 See `dist/vendor/THREE-LICENSE.txt` for the renderer license.
