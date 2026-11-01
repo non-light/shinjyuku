@@ -1,0 +1,8 @@
+{
+  "name": "shinjuku-station-walk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobile-first 3D station walking prototype",
+  "dependencies": { "three": "0.180.0" }
+}
