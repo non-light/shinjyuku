@@ -29,6 +29,20 @@ Marunouchi Line, the Keio New/Toei Shinjuku platform at B5, the Oedo platform at
 B7 and the inside-fare transfer at B4. Seibu-Shinjuku, Shinjuku-nishiguchi and
 Shinjuku-sanchome are separate stations outside this model.
 
+## Finding and using station facilities
+
+The upper-right north-up minimap shows the walker with a red dot, white rim and
+a translucent sector pointing in the viewing direction. The marker keeps its
+on-screen size on phones. A floor map uses the same locator and the stacked map
+projects the heading into its angled view.
+
+Open the map and select **設備** to find three locker banks, four vending machines
+and five benches. Their positions are representative placements in this model.
+Select one to see its floor and jump to its walkable approach. Face the fixture
+and tap the action button or press E. Locker door 09 opens and closes, a water
+bottle can be dispensed and collected, and benches offer a seated view. Move
+or use the action button to stand or leave a locker.
+
 ## Run locally
 
 The application is served from dist with no build step. Three.js 0.180.0 (MIT)

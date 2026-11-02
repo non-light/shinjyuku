@@ -1,6 +1,8 @@
+import {amenities} from './amenities.js';
+import {addAmenityModels} from './amenity-models.js';
 import * as THREE from 'three';
 import {RoomEnvironment} from './vendor/RoomEnvironment.js';
-import {floors,floorById,regions,stairs,platforms,pillars,gates,benches,hasFloorAt,hasCeilingAt,stairHeight} from './layout.js';
+import {floors,floorById,regions,stairs,platforms,pillars,gates,hasFloorAt,hasCeilingAt,stairHeight} from './layout.js';
 import {operators,ticketGates,isTransfer} from './station.js';
 import {plans,bounds} from './geometry.js';
 
@@ -124,17 +126,8 @@ export function createWorld(canvas){
   }
   const operatorMaterials=Object.fromEntries(Object.entries(operators).map(([id,op])=>[id,mat(op.color,.42,.2)]));
   for(const g of gates){const stripe=operatorMaterials[ticketGates.find(bank=>bank.id===g.gateId).operator];const rotate=g.axis==='z'?Math.PI/2:0;box(g.x,g.y+.54,g.z,2.1,1.08,.8,mats.metal,rotate);box(g.x,g.y+1.105,g.z,2.12,.13,.82,mats.dark,rotate);box(g.x,g.y+1.19,g.z,.5,.08,.55,mats.green,rotate);box(g.x,g.y+.83,g.z,2.13,.18,.85,stripe,rotate);shadow(g.x,g.z,g.axis==='x'?3.5:1.8,g.axis==='x'?1.8:3.5,g.y);}
-  for(const b of benches){box(b.x,b.y+.49,b.z,b.w,.12,1.05,mats.wood);box(b.x,b.y+.93,b.z+.46,b.w,.75,.1,mats.wood);for(const a of[-1,1])box(b.x+a*(b.w/2-.5),b.y+.23,b.z,.12,.5,.8,mats.metal);shadow(b.x,b.z,b.w+1,2.5,b.y);}
-  const lockerTex=texture(512,512,c=>{c.fillStyle='#bfc3bb';c.fillRect(0,0,512,512);for(let x=0;x<4;x++)for(let y=0;y<3;y++){const a=x*128,b=y*171;c.fillStyle=['#c1c8be','#ccd0c5','#b3beb4'][(x+y)%3];c.fillRect(a+3,b+3,122,165);c.strokeStyle='#808d7b';c.strokeRect(a+3,b+3,122,165);c.fillStyle='#6b796a';c.fillRect(a+104,b+74,8,25);c.font='15px sans-serif';c.fillText(String(100+x+y*4),a+10,b+23);}});picture(lockerTex,71,1.3,-19.97,8,2.6);
-  function vendingTexture(){return texture(512,1024,c=>{
-    c.fillStyle='#e8ebe7';c.fillRect(0,0,512,1024);c.fillStyle='#547b91';c.fillRect(22,25,468,112);c.fillStyle='#fff';c.font='500 32px sans-serif';c.fillText('REFRESH & GO',83,96);
-    c.fillStyle='#e2e9e3';c.fillRect(30,165,452,570);
-    const colors=['#ba4f38','#76a0b2','#6c8a50','#ddc25c','#e0e2da'];
-    for(let y=0;y<3;y++)for(let x=0;x<5;x++){const a=46+x*87,b=190+y*176;c.fillStyle='#ffffff';c.fillRect(a+6,b,47,104);c.fillStyle=colors[(x+y)%5];c.fillRect(a+6,b+24,47,56);c.fillStyle='#7c8b82';c.fillRect(a+20,b-7,20,9);c.fillStyle='#848e80';c.fillRect(a,b+131,61,3);c.font='16px sans-serif';c.fillText('¥150',a+10,b+123);c.fillStyle='#7a9867';c.beginPath();c.arc(a+30,b+151,7,0,7);c.fill();}
-    c.fillStyle='#273831';c.fillRect(350,780,117,80);c.fillStyle='#7cbb84';c.fillRect(366,792,80,30);c.fillStyle='#3d4b43';c.fillRect(100,878,300,80);c.fillStyle='#9ba69a';c.fillRect(130,890,240,35);
-  });}
-  const vendTex=vendingTexture();
-  for(let z=8;z<=11;z+=1.65){box(-69.3,1.15,z,1.5,2.3,1.4,mats.white);picture(vendTex,-68.54,1.15,z,1.4,2.2,Math.PI/2,.38);}
+  const amenityControls=addAmenityModels({THREE,scene,box,mat,texture,shadow},
+    amenities.map(a=>({...a,y:floorById[a.floor].height})));
   const adTex=texture(512,768,c=>{c.fillStyle='#bdc6b3';c.fillRect(0,0,512,768);c.fillStyle='#e3e5d3';c.beginPath();c.arc(360,220,175,0,7);c.fill();c.fillStyle='#8f9f79';for(let i=0;i<8;i++)c.fillRect(40+i*56,360-i*21,40,280+i*20);c.fillStyle='#f6f2dd';c.font='40px serif';c.fillText('ひと息、つこう。',55,119);c.font='20px sans-serif';c.fillText('A SLOW MOMENT IN THE CITY',52,706);});
   for(const x of[-19,-3,16]){box(x,1.65,-7.96,1.6,2.4,.055,mats.metal);picture(adTex,x,1.65,-7.925,1.5,2.28,0,.15);}
   const clockTex=texture(256,256,c=>{c.fillStyle='#e7e9df';c.beginPath();c.arc(128,128,124,0,7);c.fill();c.strokeStyle='#3c4a3d';c.lineWidth=4;c.stroke();for(let i=0;i<12;i++){c.save();c.translate(128,128);c.rotate(i*Math.PI/6);c.fillStyle='#344132';c.fillRect(-2,-111,4,12);c.restore();}c.strokeStyle='#35472f';c.lineWidth=7;c.beginPath();c.moveTo(128,128);c.lineTo(90,94);c.moveTo(128,128);c.lineTo(205,128);c.stroke();c.fillStyle='#35472f';c.beginPath();c.arc(128,128,7,0,7);c.fill();});picture(clockTex,-69.97,2.7,-3,.72,.72,Math.PI/2);
@@ -155,5 +148,5 @@ export function createWorld(canvas){
   for(const[m,matrices]of batches){const mesh=new THREE.InstancedMesh(cube,m,matrices.length);matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh);}
   const railingMesh=new THREE.InstancedMesh(new THREE.CylinderGeometry(1,1,1,8),railMat,railMatrices.length);railMatrices.forEach((m,i)=>railingMesh.setMatrixAt(i,m));railingMesh.instanceMatrix.needsUpdate=true;railingMesh.computeBoundingSphere();scene.add(railingMesh);
   let lastLightUpdate=-1000;
-  return {renderer,scene,camera,resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},setQuality(ratio){renderer.setPixelRatio(Math.min(devicePixelRatio||1,ratio));},render(time){if(time-lastLightUpdate>350){lastLightUpdate=time;const nearest=lampLocations.slice().sort((a,b)=>a.distanceToSquared(camera.position)-b.distanceToSquared(camera.position));litAreas.forEach((l,i)=>l.position.copy(nearest[i]));}renderer.render(scene,camera);}};
+  return {renderer,scene,camera,amenityControls,resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},setQuality(ratio){renderer.setPixelRatio(Math.min(devicePixelRatio||1,ratio));},render(time){if(time-lastLightUpdate>350){lastLightUpdate=time;const nearest=lampLocations.slice().sort((a,b)=>a.distanceToSquared(camera.position)-b.distanceToSquared(camera.position));litAreas.forEach((l,i)=>l.position.copy(nearest[i]));}renderer.render(scene,camera);}};
 }

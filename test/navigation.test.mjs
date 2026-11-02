@@ -1,3 +1,4 @@
+import {amenities,amenityTypes,amenityApproach,amenityBounds,facingAmenity} from '../dist/amenities.js';
 import {ticketGates,gatePoint,gateApproach} from '../dist/station.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,6 +9,26 @@ const close=(a,b,label)=>assert.ok(Math.abs(a-b)<1e-6,`${label}: ${a} != ${b}`);
 
 test('all destination spawns are on their declared floor',()=>{
   for(const d of destinations){assert.ok(isWalkable(d.x,d.z,d.floor),d.name);close(heightAt(d.x,d.z,d.floor),floorById[d.floor].height,d.name);}
+});
+test('station fixtures have solid bodies and a usable front on their own floor',()=>{
+  assert.equal(new Set(amenities.map(a=>a.id)).size,amenities.length);
+  for(const a of amenities){
+    const p=amenityApproach(a),f=floorById[a.floor],bounds=amenityBounds(a);
+    assert.equal(isWalkable(a.x,a.z,a.floor),false,a.id+' solid body');
+    for(const x of [bounds.x0,bounds.x1])for(const z of [bounds.z0,bounds.z1]){
+      assert.ok(hasFloorAt(x,z,a.floor),a.id+' footprint');
+      assert.equal(stairs.some(s=>(s.from===a.floor||s.to===a.floor)&&inStair(s,x,z,.28)),false,a.id+' stair clearance');
+    }
+    assert.ok(isWalkable(p.x,p.z,p.floor),a.id+' front');
+    assert.equal(regionAt(p.x,p.z,p.floor).zone,regionAt(a.x,a.z,a.floor).zone,a.id+' fare zone');
+    assert.equal(facingAmenity(p,p.yaw)?.id,a.id,a.id+' facing');
+    assert.notEqual(facingAmenity(p,p.yaw+Math.PI)?.id,a.id,a.id+' facing away');
+    assert.notEqual(facingAmenity({...p,floor:a.floor==='1F'?'B1':'1F'},p.yaw)?.id,a.id,a.id+' other floor');
+    assert.equal(facingAmenity({...p,stairId:'stairs'},p.yaw),null);
+    const blocked=movePlayer(surfaceAt(p.x,p.z,p.floor),a.x-p.x,a.z-p.z);
+    assert.ok(Math.hypot(blocked.x-a.x,blocked.z-a.z)>=amenityTypes[a.type].depth/2+.27);
+    close(blocked.y,f.height,a.id+' same level');
+  }
 });
 test('overlapping floor plans stay distinct without vertical teleportation',()=>{
   assert.equal(heightAt(-26,-2,'B1'),0);assert.equal(heightAt(-26,-2,'1F'),5);
@@ -145,6 +166,9 @@ test('every destination and every platform is reachable by walking from the star
   for(const d of destinations)assert.ok(seen.has(pointKey({x:d.x,z:d.z,y:floorById[d.floor].height})),`disconnected destination: ${d.id}`);
   for(const g of ticketGates)for(const sign of [-1,1]){
     const p=gatePoint(g,sign*2);assert.ok(seen.has(pointKey({...p,y:floorById[g.floor].height})),g.id+' connected side '+sign);
+  }
+  for(const a of amenities){
+    const p=amenityApproach(a);assert.ok(seen.has(pointKey({...p,y:floorById[a.floor].height})),a.id+' reachable');
   }
   for(const p of platforms)assert.ok(queue.some(q=>q.floor==='1F'&&Math.abs(q.x-p.x)<2&&q.z>p.z0+4&&q.z<p.z1-4),`disconnected platform: ${p.numbers}`);
   assert.ok(seen.size>2000,`walked graph too small: ${seen.size}`);

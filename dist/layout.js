@@ -1,3 +1,4 @@
+import {amenities,amenityBounds} from './amenities.js';
 import {room, stationRegions, stationStairs, ticketGates, gatePoint} from './station.js';
 // Floor heights and positions are scaled for walking.
 export const floors=[
@@ -72,8 +73,7 @@ export const gates=ticketGates.flatMap(g=>[-3,-1,1,3].map(offset=>({
   ...gatePoint(g,0,offset),y:floorById[g.floor].height,floor:g.floor,axis:g.axis,gateId:g.id
 })));
 for(const g of gates)obstacles.push({x0:g.x-(g.axis==='x'?1.05:.42),x1:g.x+(g.axis==='x'?1.05:.42),z0:g.z-(g.axis==='x'?.42:1.05),z1:g.z+(g.axis==='x'?.42:1.05),y:g.y,height:1.2,kind:'gate'});
-export const benches=[{x:-63,z:8,w:8,y:0},{x:73,z:24,w:9,y:0}];
-for(const b of benches)obstacles.push({x0:b.x-b.w/2,x1:b.x+b.w/2,z0:b.z-.6,z1:b.z+.7,y:b.y,height:1.35,kind:'bench'});
+for(const a of amenities)obstacles.push({...amenityBounds(a),y:floorById[a.floor].height});
 export const inRegion=(r,x,z)=>x>=r.x0&&x<=r.x1&&z>=r.z0&&z<=r.z1;
 export const inStair=(s,x,z,margin=0)=>Math.abs(x-s.x)<=s.width/2+margin&&z>=Math.min(s.z0,s.z1)-margin&&z<=Math.max(s.z0,s.z1)+margin;
 export function stairHeight(s,x,z){
@@ -116,5 +116,3 @@ for(const s of stairs)for(const side of[-1,1])for(let d=.25;d<13.75;d+=1.5){
   const ya=stairHeight(s,s.x,za),yb=stairHeight(s,s.x,zb),x=s.x+side*1.95;
   obstacles.push({x0:x-.035,x1:x+.035,z0:Math.min(za,zb),z1:Math.max(za,zb),y:Math.min(ya,yb),height:Math.abs(yb-ya)+1,kind:'rail'});
 }
-
-for(const z of[8,9.65])obstacles.push({x0:-70,x1:-68.54,z0:z-.72,z1:z+.72,y:0,height:2.3,kind:'vending'});
