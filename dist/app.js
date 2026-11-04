@@ -12,6 +12,8 @@ let preferences=read('shinjuku-walk-preferences-v1',{});
 if(!preferences||typeof preferences!=='object')preferences={};
 let sensitivity=Math.max(.4,Math.min(1.8,Number(preferences.sensitivity)||1));
 let speed=[1.5,2.8].includes(preferences.speed)?preferences.speed:2.8;
+let movementMode=preferences.movementMode==='run'?'run':'walk';
+const runningSpeed=5.6;
 let quality=[1,1.5].includes(preferences.quality)?preferences.quality:1.5;
 const rawVisited=read('shinjuku-walk-visited-v2',[]);
 const visited=new Set(Array.isArray(rawVisited)?rawVisited.filter(id=>destinations.some(d=>d.id===id)):[]);
@@ -26,8 +28,14 @@ let lastFrame=0,lastMap=0,stepDistance=0;
 let audioContext,audioGain,audioEnabled=false;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),2700);}
-function stopInput(){keys.clear();joy.x=joy.y=velocity.x=velocity.z=0;joyPointer=lookPointer=null;$('stick').style.transform='translate(0,0)';lastLook=null;}
-function storePreferences(){save('shinjuku-walk-preferences-v1',{sensitivity,speed,quality});}
+function stopInput(){keys.clear();joy.x=joy.y=velocity.x=velocity.z=0;joyPointer=lookPointer=null;$('stick').style.transform='translate(0,0)';lastLook=null;updateMovementMode();}
+function storePreferences(){save('shinjuku-walk-preferences-v1',{sensitivity,speed,quality,movementMode});}
+function isRunning(){return movementMode==='run'||keys.has('ShiftLeft')||keys.has('ShiftRight');}
+function updateMovementMode(){
+  const mode=isRunning()?'run':'walk';
+  selectOption('movement-options',mode);
+  selectOption('movement-setting-options',mode);
+}
 function markArea(){
   const id=visitIdAt(position);
   if(!id)return;
@@ -204,8 +212,17 @@ $('large-map').addEventListener('click',e=>{
 });
 $('sensitivity').value=sensitivity;
 $('sensitivity').addEventListener('input',e=>{sensitivity=Number(e.target.value);storePreferences();});
-function selectOption(id,value){for(const b of $(id).querySelectorAll('button')){const selected=Number(b.dataset.value)===value;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));}}
+function selectOption(id,value){for(const b of $(id).querySelectorAll('button')){const selected=b.dataset.value===String(value);b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));}}
 selectOption('speed-options',speed);selectOption('quality-options',quality);
+updateMovementMode();
+for(const id of ['movement-options','movement-setting-options']){
+  for(const button of $(id).querySelectorAll('button'))button.addEventListener('click',()=>{
+    movementMode=button.dataset.value;
+    updateMovementMode();storePreferences();
+    toast(movementMode==='run'?'走るモードに切り替えました':'歩くモードに切り替えました');
+    if(started&&!activeDialog)$('world').focus({preventScroll:true});
+  });
+}
 for(const b of $('speed-options').querySelectorAll('button'))b.addEventListener('click',()=>{speed=Number(b.dataset.value);selectOption('speed-options',speed);storePreferences();});
 for(const b of $('quality-options').querySelectorAll('button'))b.addEventListener('click',()=>{quality=Number(b.dataset.value);world?.setQuality(quality);selectOption('quality-options',quality);storePreferences();});
 $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else toast('このブラウザでは全画面表示に対応していません');if(activeDialog)activeDialog.close();}catch{toast('全画面表示を開始できませんでした');}});
@@ -218,8 +235,20 @@ for(const name of['pointerup','pointercancel','lostpointercapture'])$('joystick'
 $('world').addEventListener('pointerdown',e=>{if(!started||activeDialog||lookPointer!==null)return;if(e.pointerType==='mouse'&&e.button!==0)return;lookPointer=e.pointerId;lastLook={x:e.clientX,y:e.clientY};$('world').focus({preventScroll:true});$('world').setPointerCapture(e.pointerId);});
 $('world').addEventListener('pointermove',e=>{if(e.pointerId!==lookPointer||!lastLook)return;const dx=e.clientX-lastLook.x,dy=e.clientY-lastLook.y;yaw-=dx*.0032*sensitivity;pitch=Math.max(-1.1,Math.min(1.1,pitch-dy*.0028*sensitivity));lastLook={x:e.clientX,y:e.clientY};$('look-hint').style.opacity='0';});
 for(const name of['pointerup','pointercancel','lostpointercapture'])$('world').addEventListener(name,e=>{if(e.pointerId===lookPointer){lookPointer=null;lastLook=null;}});
-document.addEventListener('keydown',e=>{if(!started||activeDialog||['INPUT','BUTTON','TEXTAREA'].includes(document.activeElement?.tagName))return;if(e.code==='KeyE'){e.preventDefault();if(!e.repeat)useAmenity();return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();keys.add(e.code);}});
-document.addEventListener('keyup',e=>keys.delete(e.code));
+document.addEventListener('keydown',e=>{
+  if(!started||activeDialog||['INPUT','BUTTON','TEXTAREA'].includes(document.activeElement?.tagName))return;
+  if(e.code==='KeyE'){e.preventDefault();if(!e.repeat)useAmenity();return;}
+  if(e.code==='ShiftLeft'||e.code==='ShiftRight'){
+    keys.add(e.code);updateMovementMode();return;
+  }
+  if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)){
+    e.preventDefault();keys.add(e.code);
+  }
+});
+document.addEventListener('keyup',e=>{
+  keys.delete(e.code);
+  if(e.code==='ShiftLeft'||e.code==='ShiftRight')updateMovementMode();
+});
 window.addEventListener('blur',stopInput);
 document.addEventListener('visibilitychange',()=>{stopInput();if(document.hidden){audioContext?.suspend();}else if(audioEnabled){audioContext?.resume().catch(()=>{});}});
 
@@ -257,7 +286,8 @@ function frame(t){
     let forward=-joy.y+(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);
     if((seated||openLocker)&&(horizontal||forward))endInspection();
     const len=Math.hypot(horizontal,forward);if(len>1){horizontal/=len;forward/=len;}
-    const vx=(-Math.sin(yaw)*forward+Math.cos(yaw)*horizontal)*speed,vz=(-Math.cos(yaw)*forward-Math.sin(yaw)*horizontal)*speed;
+    const movementSpeed=isRunning()?runningSpeed:speed;
+    const vx=(-Math.sin(yaw)*forward+Math.cos(yaw)*horizontal)*movementSpeed,vz=(-Math.cos(yaw)*forward-Math.sin(yaw)*horizontal)*movementSpeed;
     const smooth=1-Math.exp(-dt*14);velocity.x+=(vx-velocity.x)*smooth;velocity.z+=(vz-velocity.z)*smooth;
     const next=movePlayer(position,velocity.x*dt,velocity.z*dt),distance=Math.hypot(next.x-position.x,next.z-position.z);
     const crossed=distance>0?gateCrossing(position,next):null;if(crossed)reportCrossing(crossed);

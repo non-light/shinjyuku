@@ -41,3 +41,13 @@
 @media(pointer:coarse){.amenity-use kbd{display:none}}
 @media(max-width:700px){.amenity-use{bottom:calc(221px + env(safe-area-inset-bottom));max-width:90%;white-space:nowrap}.map-modes button{padding:9px 8px;font-size:12px}}
 @media(max-height:530px) and (orientation:landscape){.amenity-use{bottom:38px}}
+
+/* Keep both movement modes within thumb reach below the stick. */
+.movement-options{display:flex;gap:4px;padding:4px;border-radius:28px;background:#f8f7efeb;box-shadow:0 3px 16px #21332730;pointer-events:auto}
+.movement-options button{min-width:56px;min-height:44px;padding:0 12px;border-radius:24px;background:transparent;color:#56634d;font-size:12px;font-weight:600;touch-action:manipulation}
+.movement-options button.selected{background:var(--yellow);color:var(--ink)}
+.movement-options button:focus-visible{outline:2px solid #526941;outline-offset:1px}
+#movement-setting-options button{min-height:44px;min-width:46px}
+@media(max-width:700px){.joystick-wrap{bottom:calc(80px + env(safe-area-inset-bottom))}}
+@media(max-width:700px) and (orientation:portrait){.amenity-use{bottom:calc(265px + env(safe-area-inset-bottom))}.connection-hint{bottom:calc(278px + env(safe-area-inset-bottom))}}
+@media(max-height:530px) and (orientation:landscape){.joystick-wrap{bottom:30px;flex-direction:row;gap:12px}.movement-options{flex-direction:column}}
