@@ -51,3 +51,15 @@
 @media(max-width:700px){.joystick-wrap{bottom:calc(80px + env(safe-area-inset-bottom))}}
 @media(max-width:700px) and (orientation:portrait){.amenity-use{bottom:calc(265px + env(safe-area-inset-bottom))}.connection-hint{bottom:calc(278px + env(safe-area-inset-bottom))}}
 @media(max-height:530px) and (orientation:landscape){.joystick-wrap{bottom:30px;flex-direction:row;gap:12px}.movement-options{flex-direction:column}}
+
+.view-setting .segmented button{min-height:44px;min-width:56px;font-size:12px}
+.avatar-setting{border:0;border-bottom:1px solid var(--line);min-width:0;margin:14px 0 0;padding:4px 0 16px}
+.avatar-setting legend{padding:0;font-size:12px;font-weight:500}
+#avatar-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+#avatar-options button{display:grid;justify-items:center;gap:1px;min-width:0;padding:4px 2px 6px;border-radius:7px;border:2px solid transparent;background:#e9ebe2;color:var(--ink);font:inherit;font-size:11px}
+#avatar-options button[aria-pressed=true]{background:#f6edbc;border-color:#756720;font-weight:700}
+#avatar-options button span{display:block;width:48px;height:48px;max-width:100%;background:url('./assets/characters/portraits.png') 0% center / 400% 100% no-repeat}
+#avatar-options [data-value=blue] span{background-position:33.333% center}
+#avatar-options [data-value=yellow] span{background-position:66.667% center}
+#avatar-options [data-value=green] span{background-position:100% center}
+#avatar-status:not(:empty){display:block;margin-top:7px;font-size:11px}

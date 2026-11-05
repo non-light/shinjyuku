@@ -1,6 +1,8 @@
 import {amenities,amenityTypes,amenityApproach,facingAmenity} from './amenities.js';
 import {operators,ticketGates,gateApproach,isTransfer} from './station.js';
 import {createWorld} from './world.js';
+import {createAvatar} from './avatar.js';
+import {createShoulderCamera} from './shoulder-camera.js';
 import {destinations,spawn,surfaceAt,movePlayer,areaAt,visitIdAt,nearestStair,nearbyGate,gateCrossing} from './navigation.js';
 import {floors,floorById,stairs} from './layout.js';
 import {drawFloorMap,drawOverview,mapHits} from './map.js';
@@ -13,11 +15,14 @@ if(!preferences||typeof preferences!=='object')preferences={};
 let sensitivity=Math.max(.4,Math.min(1.8,Number(preferences.sensitivity)||1));
 let speed=[1.5,2.8].includes(preferences.speed)?preferences.speed:2.8;
 let movementMode=preferences.movementMode==='run'?'run':'walk';
+let cameraMode=preferences.cameraMode==='first'?'first':'shoulder';
+let avatarColor=['red','blue','yellow','green'].includes(preferences.avatarColor)?preferences.avatarColor:'red';
 const runningSpeed=5.6;
 let quality=[1,1.5].includes(preferences.quality)?preferences.quality:1.5;
 const rawVisited=read('shinjuku-walk-visited-v2',[]);
 const visited=new Set(Array.isArray(rawVisited)?rawVisited.filter(id=>destinations.some(d=>d.id===id)):[]);
 let world,started=false,activeDialog=null,walked=0,yaw=-Math.PI/2,pitch=-.035;
+let avatar,avatarReady,appliedColor,colorRequest=0,followCamera,cameraCut=true;
 let position={...spawn};
 let mapFloor='overview',mapPanel='map',selectedPlace=null;
 let seated=null,openLocker=null;
@@ -29,7 +34,7 @@ let audioContext,audioGain,audioEnabled=false;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),2700);}
 function stopInput(){keys.clear();joy.x=joy.y=velocity.x=velocity.z=0;joyPointer=lookPointer=null;$('stick').style.transform='translate(0,0)';lastLook=null;updateMovementMode();}
-function storePreferences(){save('shinjuku-walk-preferences-v1',{sensitivity,speed,quality,movementMode});}
+function storePreferences(){save('shinjuku-walk-preferences-v1',{sensitivity,speed,quality,movementMode,cameraMode,avatarColor});}
 function isRunning(){return movementMode==='run'||keys.has('ShiftLeft')||keys.has('ShiftRight');}
 function updateMovementMode(){
   const mode=isRunning()?'run':'walk';
@@ -66,6 +71,7 @@ function updateAmenityPrompt(a){
 }
 function endInspection(){
   if(openLocker){world.amenityControls.setLockerOpen(openLocker.id,false);openLocker=null;}
+  if(seated)cameraCut=true;
   seated=null;
 }
 function useAmenity(){
@@ -74,7 +80,7 @@ function useAmenity(){
   else{
     const a=facingAmenity(position,yaw);if(!a)return;
     const front=amenityApproach(a);
-    stopInput();position=surfaceAt(front.x,front.z,front.floor);yaw=front.yaw;pitch=front.pitch;
+    stopInput();position=surfaceAt(front.x,front.z,front.floor);yaw=front.yaw;pitch=front.pitch;cameraCut=true;
     if(a.type==='locker'){
       openLocker=a;world.amenityControls.setLockerOpen(a.id,true);
     }else if(a.type==='vending'){
@@ -109,7 +115,7 @@ function teleport(d){
   if(!world)return;
   endInspection();stopInput();position=surfaceAt(d.x,d.z,d.floor);yaw=d.yaw;pitch=d.pitch??-.035;
   if(!started)start();if(activeDialog)activeDialog.close();
-  world.camera.position.set(position.x,position.y+1.65,position.z);updateLocation();toast(`${d.name}へ移動しました`);$('world').focus({preventScroll:true});
+  cameraCut=true;updateLocation();toast(`${d.name}へ移動しました`);$('world').focus({preventScroll:true});
 }
 $('reset').addEventListener('click',()=>teleport({...spawn,name:'西口地下広場'}));
 function updateDestinations(){
@@ -213,6 +219,36 @@ $('large-map').addEventListener('click',e=>{
 $('sensitivity').value=sensitivity;
 $('sensitivity').addEventListener('input',e=>{sensitivity=Number(e.target.value);storePreferences();});
 function selectOption(id,value){for(const b of $(id).querySelectorAll('button')){const selected=b.dataset.value===String(value);b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));}}
+async function loadAvatarColor(color){
+  const request=++colorRequest;
+  $('avatar-status').textContent='';
+  try{
+    if(!avatarReady){
+      avatarReady=createAvatar(world.scene,color).then(loaded=>{
+        avatar=loaded;appliedColor=color;cameraCut=true;return loaded;
+      }).catch(error=>{avatarReady=null;throw error;});
+    }
+    const loaded=await avatarReady;
+    if(request!==colorRequest)return;
+    if(await loaded.setColor(color))appliedColor=color;
+  }catch(error){
+    if(request!==colorRequest)return;
+    console.error('Character model could not be loaded',error);
+    if(appliedColor){avatarColor=appliedColor;selectOption('avatar-options',avatarColor);storePreferences();}
+    const message='人物の読み込みに失敗しました。服の色を選ぶと再読み込みできます。';
+    $('avatar-status').textContent=message;toast(message);
+  }
+}
+selectOption('camera-options',cameraMode);selectOption('avatar-options',avatarColor);
+for(const button of $('camera-options').querySelectorAll('button'))button.addEventListener('click',()=>{
+  cameraMode=button.dataset.value;cameraCut=true;
+  selectOption('camera-options',cameraMode);storePreferences();
+  if(cameraMode==='shoulder'&&world&&!avatar)loadAvatarColor(avatarColor);
+});
+for(const button of $('avatar-options').querySelectorAll('button'))button.addEventListener('click',()=>{
+  avatarColor=button.dataset.value;selectOption('avatar-options',avatarColor);storePreferences();
+  if(world)loadAvatarColor(avatarColor);
+});
 selectOption('speed-options',speed);selectOption('quality-options',quality);
 updateMovementMode();
 for(const id of ['movement-options','movement-setting-options']){
@@ -279,8 +315,31 @@ function reportCrossing({gate,zone}){
   tone.connect(gain).connect(audioGain);tone.start(now);tone.stop(now+.14);
   tone.onended=()=>{tone.disconnect();gain.disconnect();};
 }
+function updatePlayerView(t,dt,travel,forwardTravel){
+  const x=seated?.x??position.x,z=seated?.z??position.z;
+  const ground=position.y - (seated ? .16 : 0);
+  const viewYaw=yaw+(!started&&!reducedMotion?Math.sin(t*.00012)*.025:0);
+  if(avatar){
+    avatar.group.position.set(x,ground,z);
+    avatar.group.rotation.y=seated?seated.yaw:yaw+Math.PI;
+    const moving=dt>0&&travel/dt>.08;
+    const running=isRunning();
+    const gait=seated?'Sit':moving?(running?'Run':'Walk'):'Idle';
+    const pace=moving?Math.max(.4,Math.min(1.6,travel/dt/(running?5.6:2.8))):1;
+    avatar.update(activeDialog||document.hidden?0:dt,gait,forwardTravel<-.001?-pace:pace);
+    avatar.group.visible=cameraMode==='shoulder'&&followCamera(x,ground,z,viewYaw,pitch,dt,cameraCut);
+  }
+  if(cameraMode==='first'||!avatar){
+    world.camera.position.x=x;world.camera.position.z=z;
+    const eye=position.y+(seated?1.16:1.65);
+    world.camera.position.y=cameraCut?eye:world.camera.position.y+(eye-world.camera.position.y)*(1-Math.exp(-dt*20));
+    world.camera.rotation.set(pitch,viewYaw,0,'YXZ');
+  }
+  cameraCut=false;
+}
 function frame(t){
   const dt=Math.min(.045,(t-lastFrame)/1000||.016);lastFrame=t;
+  let distance=0,forwardTravel=0;
   if(started&&!activeDialog&&!document.hidden){
     let horizontal=joy.x+(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
     let forward=-joy.y+(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);
@@ -289,21 +348,27 @@ function frame(t){
     const movementSpeed=isRunning()?runningSpeed:speed;
     const vx=(-Math.sin(yaw)*forward+Math.cos(yaw)*horizontal)*movementSpeed,vz=(-Math.cos(yaw)*forward-Math.sin(yaw)*horizontal)*movementSpeed;
     const smooth=1-Math.exp(-dt*14);velocity.x+=(vx-velocity.x)*smooth;velocity.z+=(vz-velocity.z)*smooth;
-    const next=movePlayer(position,velocity.x*dt,velocity.z*dt),distance=Math.hypot(next.x-position.x,next.z-position.z);
+    const next=movePlayer(position,velocity.x*dt,velocity.z*dt);
+    const dx=next.x-position.x,dz=next.z-position.z;
+    distance=Math.hypot(dx,dz);forwardTravel=-Math.sin(yaw)*dx-Math.cos(yaw)*dz;
     const crossed=distance>0?gateCrossing(position,next):null;if(crossed)reportCrossing(crossed);
     position=next;walked+=distance;stepDistance+=distance;
     if(stepDistance>.8){stepDistance=0;footstep();}
     $('walked').textContent=Math.floor(walked);updateLocation();
   }
-  world.camera.position.x=seated?.x??position.x;world.camera.position.z=seated?.z??position.z;
-  world.camera.position.y+=(position.y+(seated?1.16:1.65)-world.camera.position.y)*(1-Math.exp(-dt*20));
-  world.camera.rotation.y=yaw+(!started&&!reducedMotion?Math.sin(t*.00012)*.025:0);world.camera.rotation.x=pitch;
+  updatePlayerView(t,dt,distance,forwardTravel);
   if(t-lastMap>120){lastMap=t;drawMap($('mini-map'));if(activeDialog?.id==='map-dialog'&&mapPanel==='map')drawMap($('large-map'),true);}
   world.render(t);requestAnimationFrame(frame);
 }
 function showError(error){console.error('3D scene could not start',error);$('error').hidden=false;$('intro').hidden=true;$('intro-caption').hidden=true;}
-requestAnimationFrame(()=>{
-  try{world=createWorld($('world'));world.setQuality(quality);world.camera.position.set(position.x,position.y+1.65,position.z);world.camera.rotation.y=yaw;world.camera.rotation.x=pitch;world.render(0);$('start').disabled=false;$('start-label').textContent='散策をはじめる';requestAnimationFrame(frame);}
+requestAnimationFrame(async()=>{
+  try{
+    world=createWorld($('world'));world.setQuality(quality);
+    followCamera=createShoulderCamera(world.scene,world.camera);
+    await loadAvatarColor(avatarColor);
+    updatePlayerView(0,0,0,0);world.render(0);
+    $('start').disabled=false;$('start-label').textContent='散策をはじめる';requestAnimationFrame(frame);
+  }
   catch(error){showError(error);}
 });
 $('world').addEventListener('webglcontextlost',e=>{e.preventDefault();stopInput();showError(new Error('WebGL context lost'));});

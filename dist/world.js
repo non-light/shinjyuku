@@ -26,7 +26,7 @@ export function createWorld(canvas){
   const wallMat=new THREE.MeshStandardMaterial({map:wallTexture,bumpMap:wallTexture,bumpScale:.008,roughness:.8,side:THREE.DoubleSide});
   const floorData={p:[],u:[]},ceilingData={p:[],u:[]},wallData={p:[],u:[]},stairUndersides={p:[],u:[]};
   function quad(data,points,uvs){for(const i of[0,1,2,0,2,3]){data.p.push(...points[i]);data.u.push(...uvs[i]);}}
-  function surface(data,material){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(data.u,2));g.computeVertexNormals();scene.add(new THREE.Mesh(g,material));}
+  function surface(data,material){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(data.u,2));g.computeVertexNormals();const mesh=new THREE.Mesh(g,material);mesh.userData.stationQuads=true;scene.add(mesh);}
   // One source of truth supplies floor holes, ceiling holes and wall portals.
   for(const plan of plans){const f=plan.floor;
     for(const r of plan.patches)quad(floorData,[[r.x0,f.height,r.z0],[r.x0,f.height,r.z1],[r.x1,f.height,r.z1],[r.x1,f.height,r.z0]],[[r.x0/2,r.z0/2],[r.x0/2,r.z1/2],[r.x1/2,r.z1/2],[r.x1/2,r.z0/2]]);
